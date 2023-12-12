@@ -566,7 +566,8 @@ fn serialize_externally_tagged_variant(
         }
         (true, expr) => {
             quote_expr! {
-                let __variant_discriminant: &'static str = (#expr).to_string().leak();
+                static __VARIANT_DISCRIMINANT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+                let __variant_discriminant: &'static str = __VARIANT_DISCRIMINANT.get_or_init(||(#expr).to_string());
             }
         }
         (false, _) => {
