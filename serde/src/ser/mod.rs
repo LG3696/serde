@@ -253,6 +253,43 @@ pub trait Serialize {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+/// TODO: document
+pub enum EnumReprVariant {
+    /// TODO: document
+    U8(u8, &'static str),
+    /// TODO: document
+    U16(u16, &'static str),
+    /// TODO: document
+    U32(u32, &'static str),
+    /// TODO: document
+    U64(u64, &'static str),
+
+    /// TODO: document
+    I8(i8, &'static str),
+    /// TODO: document
+    I16(i16, &'static str),
+    /// TODO: document
+    I32(i32, &'static str),
+    /// TODO: document
+    I64(i64, &'static str),
+}
+
+impl EnumReprVariant {
+    /// TODO: document
+    pub fn str_repr(&self) -> &'static str {
+        match self {
+            EnumReprVariant::U8(_, variant) => variant,
+            EnumReprVariant::U16(_, variant) => variant,
+            EnumReprVariant::U32(_, variant) => variant,
+            EnumReprVariant::U64(_, variant) => variant,
+            EnumReprVariant::I8(_, variant) => variant,
+            EnumReprVariant::I16(_, variant) => variant,
+            EnumReprVariant::I32(_, variant) => variant,
+            EnumReprVariant::I64(_, variant) => variant,
+        }
+    }
+}
+
 /// A **data format** that can serialize any data structure supported by Serde.
 ///
 /// The role of this trait is to define the serialization half of the [Serde
@@ -871,6 +908,16 @@ pub trait Serializer: Sized {
         variant: &'static str,
     ) -> Result<Self::Ok, Self::Error>;
 
+    /// TODO: document
+    fn serialize_unit_variant_repr(
+        self,
+        name: &'static str,
+        variant_index: u32,
+        variant: EnumReprVariant,
+    ) -> Result<Self::Ok, Self::Error> {
+        self.serialize_unit_variant(name, variant_index, variant.str_repr())
+    }
+
     /// Serialize a newtype struct like `struct Millimeters(u8)`.
     ///
     /// Serializers are encouraged to treat newtype structs as insignificant
@@ -934,6 +981,20 @@ pub trait Serializer: Sized {
     ) -> Result<Self::Ok, Self::Error>
     where
         T: Serialize;
+
+    /// TODO: document
+    fn serialize_newtype_variant_repr<T: ?Sized>(
+        self,
+        name: &'static str,
+        variant_index: u32,
+        variant: EnumReprVariant,
+        value: &T,
+    ) -> Result<Self::Ok, Self::Error>
+    where
+        T: Serialize,
+    {
+        self.serialize_newtype_variant(name, variant_index, variant.str_repr(), value)
+    }
 
     /// Begin to serialize a variably sized sequence. This call must be
     /// followed by zero or more calls to `serialize_element`, then a call to
@@ -1117,6 +1178,17 @@ pub trait Serializer: Sized {
         len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error>;
 
+    /// TODO: document
+    fn serialize_tuple_variant_repr(
+        self,
+        name: &'static str,
+        variant_index: u32,
+        variant: EnumReprVariant,
+        len: usize,
+    ) -> Result<Self::SerializeTupleVariant, Self::Error> {
+        self.serialize_tuple_variant(name, variant_index, variant.str_repr(), len)
+    }
+
     /// Begin to serialize a map. This call must be followed by zero or more
     /// calls to `serialize_key` and `serialize_value`, then a call to `end`.
     ///
@@ -1243,6 +1315,17 @@ pub trait Serializer: Sized {
         variant: &'static str,
         len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error>;
+
+    /// TODO: document
+    fn serialize_struct_variant_repr(
+        self,
+        name: &'static str,
+        variant_index: u32,
+        variant: EnumReprVariant,
+        len: usize,
+    ) -> Result<Self::SerializeStructVariant, Self::Error> {
+        self.serialize_struct_variant(name, variant_index, variant.str_repr(), len)
+    }
 
     /// Collect an iterator as a sequence.
     ///
@@ -1434,6 +1517,23 @@ pub trait Serializer: Sized {
     #[inline]
     fn is_human_readable(&self) -> bool {
         true
+    }
+
+    /// TODO: document
+    fn serialize_enum_repr_as_int(
+        self,
+        enum_repr: EnumReprVariant,
+    ) -> Result<Self::Ok, Self::Error> {
+        match enum_repr {
+            EnumReprVariant::U8(i, _) => self.serialize_u8(i),
+            EnumReprVariant::U16(i, _) => self.serialize_u16(i),
+            EnumReprVariant::U32(i, _) => self.serialize_u32(i),
+            EnumReprVariant::U64(i, _) => self.serialize_u64(i),
+            EnumReprVariant::I8(i, _) => self.serialize_i8(i),
+            EnumReprVariant::I16(i, _) => self.serialize_i16(i),
+            EnumReprVariant::I32(i, _) => self.serialize_i32(i),
+            EnumReprVariant::I64(i, _) => self.serialize_i64(i),
+        }
     }
 }
 

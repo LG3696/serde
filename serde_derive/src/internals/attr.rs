@@ -219,6 +219,7 @@ pub struct Container {
     has_flatten: bool,
     serde_path: Option<syn::Path>,
     is_packed: bool,
+    repr_type: Option<syn::Type>,
     /// Error message generated when type can't be deserialized
     expecting: Option<String>,
     non_exhaustive: bool,
@@ -566,6 +567,14 @@ impl Container {
             }
         }
 
+        let repr_type = item
+            .attrs
+            .iter()
+            .flat_map(|attr| get_repr_type(cx, attr))
+            .filter(Option::is_some)
+            .map(Option::unwrap)
+            .next();
+
         Container {
             name: Name::from_attrs(unraw(&item.ident), ser_name, de_name, None),
             transparent: transparent.get(),
@@ -590,6 +599,7 @@ impl Container {
             has_flatten: false,
             serde_path: serde_path.get(),
             is_packed,
+            repr_type,
             expecting: expecting.get(),
             non_exhaustive,
         }
@@ -670,6 +680,10 @@ impl Container {
     pub fn serde_path(&self) -> Cow<syn::Path> {
         self.custom_serde_path()
             .map_or_else(|| Cow::Owned(parse_quote!(_serde)), Cow::Borrowed)
+    }
+
+    pub fn repr_type(&self) -> Option<&syn::Type> {
+        self.repr_type.as_ref()
     }
 
     /// Error message generated when type can't be deserialized.
@@ -1458,6 +1472,33 @@ fn get_where_predicates(
 ) -> syn::Result<SerAndDe<Vec<syn::WherePredicate>>> {
     let (ser, de) = get_ser_and_de(cx, BOUND, meta, parse_lit_into_where)?;
     Ok((ser.at_most_one(), de.at_most_one()))
+}
+
+pub fn get_repr_type(cx: &Ctxt, attr: &syn::Attribute) -> Result<Option<syn::Type>, ()> {
+    if attr.path().is_ident("repr") {
+        let mut repr = None;
+        if let Ok(()) = attr.parse_nested_meta(|meta| {
+            // #[repr(C)]
+            if meta.path.is_ident("C") {
+                repr = Some(syn::parse_quote! {u8});
+                Ok(())
+            } else {
+                repr = syn::parse::<syn::Type>(meta.path.to_token_stream().into())
+                    .map_err(|e| {
+                        cx.syn_error(e);
+                        ()
+                    })
+                    .ok();
+                Ok(())
+            }
+        }) {
+            Ok(repr)
+        } else {
+            Ok(None)
+        }
+    } else {
+        Ok(None)
+    }
 }
 
 fn get_lit_str(

@@ -796,6 +796,43 @@ where
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+///
+/// TODO: document
+pub enum EnumVariantReprs {
+    /// TODO: document
+    U8(&'static [u8], &'static [&'static str]),
+    /// TODO: document
+    U16(&'static [u16], &'static [&'static str]),
+    /// TODO: document
+    U32(&'static [u32], &'static [&'static str]),
+    /// TODO: document
+    U64(&'static [u64], &'static [&'static str]),
+
+    /// TODO: document
+    I8(&'static [i8], &'static [&'static str]),
+    /// TODO: document
+    I16(&'static [i16], &'static [&'static str]),
+    /// TODO: document
+    I32(&'static [i32], &'static [&'static str]),
+    /// TODO: document
+    I64(&'static [i64], &'static [&'static str]),
+}
+
+impl EnumVariantReprs {
+    /// TODO: document
+    pub fn str_variants(&self) -> &'static [&'static str] {
+        match self {
+            EnumVariantReprs::U8(_, str_variants) => str_variants,
+            EnumVariantReprs::U16(_, str_variants) => str_variants,
+            EnumVariantReprs::U32(_, str_variants) => str_variants,
+            EnumVariantReprs::U64(_, str_variants) => str_variants,
+            EnumVariantReprs::I8(_, str_variants) => str_variants,
+            EnumVariantReprs::I16(_, str_variants) => str_variants,
+            EnumVariantReprs::I32(_, str_variants) => str_variants,
+            EnumVariantReprs::I64(_, str_variants) => str_variants,
+        }
+    }
+}
 
 /// A **data format** that can deserialize any data structure supported by
 /// Serde.
@@ -1131,6 +1168,19 @@ pub trait Deserializer<'de>: Sized {
     ) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>;
+
+    /// TODO: document
+    fn deserialize_enum_repr<V>(
+        self,
+        name: &'static str,
+        variants: &'static EnumVariantReprs,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_enum(name, variants.str_variants(), visitor)
+    }
 
     /// Hint that the `Deserialize` type is expecting the name of a struct
     /// field or the discriminant of an enum variant.

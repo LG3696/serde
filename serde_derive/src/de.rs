@@ -1231,6 +1231,7 @@ fn prepare_enum_variant_enum(
         .collect();
 
     let fallthrough = deserialized_variants
+        .clone()
         .position(|(_, variant)| variant.attrs.other())
         .map(|other_idx| {
             let ignore_variant = variant_names_idents[other_idx].1.clone();
@@ -1239,9 +1240,60 @@ fn prepare_enum_variant_enum(
 
     let variants_stmt = {
         let variant_names = variant_names_idents.iter().map(|(name, _, _)| name);
-        quote! {
-            #[doc(hidden)]
-            const VARIANTS: &'static [&'static str] = &[ #(#variant_names),* ];
+        if let Some(repr_type) = cattrs.repr_type() {
+            let mut discriminants = Vec::new();
+            let mut last_discriminant = None;
+            let mut iterations_without_discriminant = 0;
+            for (_, variant) in deserialized_variants {
+                let discriminant = variant.original.discriminant.as_ref().map(|(_, d)| d);
+                let discriminant: syn::Expr = if let Some(expr) = discriminant {
+                    last_discriminant = Some(expr);
+                    parse_quote!(#expr)
+                } else if let Some(expr) = last_discriminant {
+                    match expr {
+                        syn::Expr::Lit(syn::ExprLit {
+                            lit: syn::Lit::Int(lit_int),
+                            ..
+                        }) => {
+                            let value = lit_int.base10_parse::<u64>().unwrap();
+                            let value = value + iterations_without_discriminant;
+                            let value = syn::Lit::Int(syn::LitInt::new(
+                                &value.to_string(),
+                                Span::call_site(),
+                            ));
+                            parse_quote!(#value)
+                        }
+                        _ => {
+                            let iterations_without_discriminant = syn::Lit::Int(syn::LitInt::new(
+                                &iterations_without_discriminant.to_string(),
+                                Span::call_site(),
+                            ));
+                            parse_quote!(#expr + #iterations_without_discriminant)
+                        }
+                    }
+                } else {
+                    let iterations_without_discriminant = syn::Lit::Int(syn::LitInt::new(
+                        &iterations_without_discriminant.to_string(),
+                        Span::call_site(),
+                    ));
+                    parse_quote!(#iterations_without_discriminant)
+                };
+
+                discriminants.push(discriminant);
+                iterations_without_discriminant += 1;
+            }
+
+            quote! {
+                #[doc(hidden)]
+                const VARIANTS: &'static [&'static str] = &[ #(#variant_names),* ];
+                #[doc(hidden)]
+                const REPR_VARIANTS: &'static [#repr_type] = &[ #(#discriminants),* ];
+            }
+        } else {
+            quote! {
+                #[doc(hidden)]
+                const VARIANTS: &'static [&'static str] = &[ #(#variant_names),* ];
+            }
         }
     };
 
@@ -1311,6 +1363,36 @@ fn deserialize_externally_tagged_enum(
         }
     };
 
+    let deserialize_enum_call = if let Some(repr_type) = cattrs.repr_type() {
+        let repr_type = syn::Ident::new(
+            &quote! { #repr_type }.to_string().to_uppercase(),
+            Span::call_site(),
+        );
+        quote! {
+            _serde::Deserializer::deserialize_enum_repr(
+                __deserializer,
+                #type_name,
+                &_serde::de::EnumVariantReprs::#repr_type (REPR_VARIANTS, VARIANTS),
+                __Visitor {
+                    marker: _serde::__private::PhantomData::<#this_type #ty_generics>,
+                    lifetime: _serde::__private::PhantomData,
+                },
+            )
+        }
+    } else {
+        quote! {
+            _serde::Deserializer::deserialize_enum(
+                __deserializer,
+                #type_name,
+                VARIANTS,
+                __Visitor {
+                    marker: _serde::__private::PhantomData::<#this_type #ty_generics>,
+                    lifetime: _serde::__private::PhantomData,
+                },
+            )
+        }
+    };
+
     quote_block! {
         #variant_visitor
 
@@ -1337,15 +1419,7 @@ fn deserialize_externally_tagged_enum(
 
         #variants_stmt
 
-        _serde::Deserializer::deserialize_enum(
-            __deserializer,
-            #type_name,
-            VARIANTS,
-            __Visitor {
-                marker: _serde::__private::PhantomData::<#this_type #ty_generics>,
-                lifetime: _serde::__private::PhantomData,
-            },
-        )
+        #deserialize_enum_call
     }
 }
 
